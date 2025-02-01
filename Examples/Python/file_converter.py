@@ -20,9 +20,9 @@ def callback(progress):
     print_progress(progress)
 
 
-destination = "C:/"
+destination = "./Data"
 name = "File Conversion Example"
-file_paths = ["C:/file.ximu3"]
+file_paths = ["./Data/file.ximu3"]
 
 if helpers.ask_question("Use async implementation?"):
     _ = ximu3.FileConverter(destination, name, file_paths, callback)

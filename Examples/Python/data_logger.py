@@ -17,8 +17,8 @@ for device in devices:
         raise Exception("Unable to open connection")
 
 # Log data
-destination = "C:/"
-name = "Data Logger Example"
+destination = "LoggedData"
+name = "Data-Logger-Example"
 
 if helpers.ask_question("Use async implementation?"):
     data_logger = ximu3.DataLogger(destination, name, connections)
