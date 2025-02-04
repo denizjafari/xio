@@ -10,6 +10,7 @@ class Connection:
     def __init__(self, connection_info, log_root="LoggedDataNetwork"):
         """Initialize the xIMU3 connection, create CSV files, register callbacks."""
         self.__connection = ximu3.Connection(connection_info)
+        print(self.__connection)
 
         if self.__connection.open() != ximu3.RESULT_OK:
             raise Exception(f"Unable to open {connection_info.to_string()}")
@@ -26,7 +27,7 @@ class Connection:
         # Create a per-device log directory
         self.log_dir = os.path.join(log_root, f"{device_name}_{serial_number}")
         os.makedirs(self.log_dir, exist_ok=True)
-
+        print('data directories made!')
         # ---------------------------------------------------------------------
         # Open CSV files for each data type we want to log
         # ---------------------------------------------------------------------
@@ -342,6 +343,7 @@ if __name__ == "__main__":
     announcements = ximu3.NetworkAnnouncement().get_messages_after_short_delay()
     print(announcements)
     print('HEERE')
+    
     connections = [Connection(m.to_udp_connection_info()) for m in announcements]
     print(connections[0])
     print('now here')
