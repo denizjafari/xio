@@ -110,7 +110,7 @@ for connection in connections:
     #connection.send_command("note", "Hello World!")  # example command with string value
     connection.send_command("udpDataMessagesEnabled", True)  # example command with true/false value
     connection.send_command("inertialMessageRateDivisor", 8)  # example command with number value
-    print('im here')
+
 time.sleep(3)
 
 for connection in connections:

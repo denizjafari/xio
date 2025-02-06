@@ -76,10 +76,10 @@ class Connection:
         if len(parts) < 4:
             print("Unexpected quaternion message format:", data_str)
             return
-        
+        print('testing here')
         q0, q1, q2, q3 = parts[-4:]
         timestamp = parts[0]
-
+       
         device_name = self.__prefix.split()[0]
         
         if self.csv_writer is not None:
@@ -93,6 +93,7 @@ class Connection:
     def __rotation_matrix_callback(self, message):
         print("Rotation Matrix callback invoked!")
         print(self.__prefix + message.to_string())
+        #print('HEEEREEEEE: ', message.R11)
 
     def __euler_angles_callback(self, message):
         print("Euler Angles callback invoked!")
