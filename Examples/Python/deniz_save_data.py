@@ -30,7 +30,7 @@ class Connection:
 
         # Create a per-device folder for CSV logs
         self.log_dir = os.path.join(log_root, f"{self.device_name}_{self.serial_number}")
-        print(self.log_dir)
+      
         os.makedirs(self.log_dir, exist_ok=True)
 
         # ---------------------------------------------------------------------

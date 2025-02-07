@@ -1,0 +1,17 @@
+TECB, OTEC Transfer Switch-Electronic Control: 150A 
+OTEC150, Transfer Switch, PowerCommand, 150 Amp 
+Listing - UL 1008/CSA Certification 
+Application - Utility to Genset 
+Cabinet - Type 1 
+Poles - 3 (Solid Neutral) 
+Frequency - 60 Hz 
+System - 3 Phase, 3 or 4 Wire 
+Voltage - 600 Volts AC 
+Genset Starting Battery - 12V DC 
+PC40 Control 
+Aux Relay - Emergency Position - 12 Volts DC 
+Aux Relay - Normal Position - 12 Volts DC 
+Interface - Communications Network, MODBUS RTU Module
+Control Panel, Security Key Cover 
+Relay - Elevator Signal 
+Transfer Switch Warranty - 1 Year Comprehensive

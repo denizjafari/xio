@@ -128,10 +128,10 @@ class Connection:
         if len(parts) < 4:
             print("Unexpected magnetometer message format:", data_str)
             return None
-        device_name = self.__prefix.split()[0]
         timestamp = parts[0]
-        gyro_x , gyro_y, gyro_z = parts[1:4]
-        acc_x, acc_y, acc_z = parts[-4:]
+        gyro_x , gyro_y, gyro_z = parts[2:7:2]
+        acc_x , acc_y, acc_z = parts[8::2]
+        device_name = self.__prefix.split()[0]
         return [device_name, timestamp, gyro_x , gyro_y, gyro_z, acc_x, acc_y, acc_z]
 
 
@@ -146,15 +146,14 @@ class Connection:
             return None
         device_name = self.__prefix.split()[0]
         timestamp = parts[0]
-        mag_x, mag_y, mag_z = parts[1:]
+        mag_x, mag_y, mag_z = parts[2::2]
+        
         return [device_name, timestamp, mag_x, mag_y, mag_z]
 
     def parse_quaternion(self, message):
         """
         Custom parser for quaternion messages.
-        Expected format (space separated):
-          parts[0] = device name, parts[1] = serial, parts[2] = timestamp,
-          parts[3] = unit, parts[4:8] = quaternion values.
+        Expected format (space separated)
         """
         data_str = message.to_string()
         parts = data_str.split()
@@ -169,6 +168,7 @@ class Connection:
     def parse_rotation(self, message):
         data_str = message.to_string()
         parts = data_str.split()
+        print(parts)
         if len(parts) < 4:
             print("Unexpected quaternion message format:", data_str)
             return None
@@ -195,6 +195,7 @@ class Connection:
         
         data_str = message.to_string()
         parts = data_str.split()
+        print('parts of linear acc ', parts)
         if len(parts) < 3:
             print("Unexpected quaternion message format:", data_str)
             return None
@@ -209,6 +210,7 @@ class Connection:
         
         data_str = message.to_string()
         parts = data_str.split()
+        print('parts of earth linear acc ', parts)
         if len(parts) < 3:
             print("Unexpected quaternion message format:", data_str)
             return None
@@ -224,12 +226,13 @@ class Connection:
         
         data_str = message.to_string()
         parts = data_str.split()
+        
         if len(parts) < 3:
             print("Unexpected quaternion message format:", data_str)
             return None
         device_name = self.__prefix.split()[0]
         timestamp = parts[0]
-        x, y, z = parts[-3:]
+        x, y, z = parts[2::2]
         return [device_name, timestamp, x, y, z]
 
     def parse_error(self, message):
@@ -239,6 +242,7 @@ class Connection:
         return [message.to_string()]
     
     def __ahrs_status_callback(self, message):
+        print("AHRS status callback invoked!")
         print(self.__prefix + message.to_string())
 
 
