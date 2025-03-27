@@ -124,7 +124,7 @@ class Connection:
         
         data_str = message.to_string()
         parts = data_str.split()
-        print('mag parts',parts)
+        
         if len(parts) < 3:
             print("Unexpected magnetometer message format:", data_str)
             return None
@@ -166,7 +166,7 @@ class Connection:
     def __rotation_matrix_callback(self, message):
         print("Rotation Matrix callback invoked!")
         print(self.__prefix + message.to_string())
-        #print('HEEEREEEEE: ', message.R11)
+        
 
     def __euler_angles_callback(self, message):
         print("Euler Angles callback invoked!")

@@ -262,13 +262,7 @@ if __name__ == "__main__":
     if not connections:
         raise Exception("No UDP connections available")
 
-    '''
-    for connection in connections:
-        connection.send_command("strobe")  # example command with null value
-        connection.send_command("note", "Hello World!")  # example command with string value
-        connection.send_command("udpDataMessagesEnabled", True)  # example command with true/false value
-        connection.send_command("inertialMessageRateDivisor", 8)  # example command with number value
-    '''
+
     
     stop_event = threading.Event()
     key_monitor_thread = threading.Thread(target=monitor_key_press, args=(stop_event,))
