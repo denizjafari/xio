@@ -135,8 +135,9 @@ axAng.legend()
 ##############################################################################
 # Additional Data Records for New Movements
 ##############################################################################
-elbow_data_records = []   # For elbow flexion/extension (yaw from IMU-2)
-wrist_data_records = []   # For wrist pronation/supination (roll from IMU-1 and IMU-2)
+elbow_data_records = []            # For elbow flexion/extension (yaw from IMU-2)
+wrist_data_records = []            # For wrist pronation/supination (roll from IMU-1 and IMU-2)
+shoulder_rotation_data_records = []  # For shoulder rotation (adjusted pitch from IMU-2)
 
 ##############################################################################
 # 4) MAKE AXES EQUAL IN 3D
@@ -177,7 +178,6 @@ def angle_between(v1, v2):
 ##############################################################################
 # 5') RELATIVE RPY FROM FRAME 0
 ##############################################################################
-
 # Store reference quaternions for each IMU from frame 0
 reference_quaternions = {}
 for imu_id, df_imu in processed_data.items():
@@ -186,7 +186,7 @@ for imu_id, df_imu in processed_data.items():
     reference_quaternions[imu_id] = q_ref
 
 ##############################################################################
-# 5'') FUNCTION TO INTERPRET SHOULDER & SAVE
+# 5'') FUNCTION TO INTERPRET SHOULDER & SAVE (IMU-3)
 ##############################################################################
 # For IMU-3 (Upper Arm), interpret pitch (Y axis) as abduction/adduction and yaw (Z axis) as flexion/extension.
 shoulder_data_records = []  # each element: [frame, abduction, flexion]
@@ -198,12 +198,11 @@ def relative_angle(imu_id, diff_angle, frame):
       - Use diff_angle[2] as flexion/extension (yaw)
     """
     diff_roll, diff_pitch, diff_yaw = diff_angle
-
     if imu_id == "IMU-3":
         shoulder_data_records.append([
-            frame,           # frame index
-            diff_pitch,      # abduction/adduction (pitch)
-            diff_yaw         # flexion/extension (yaw)
+            frame,      # frame index
+            diff_pitch, # abduction/adduction (pitch)
+            diff_yaw    # flexion/extension (yaw)
         ])
 
 ##############################################################################
@@ -232,16 +231,26 @@ def update(frame):
         # Capture shoulder angles for IMU-3
         relative_angle(imu_id, (roll_diff, pitch_diff, yaw_diff), frame)
 
-        # Capture elbow flexion/extension (yaw) for IMU-2
+        # For IMU-2, capture multiple measurements:
         if imu_id == "IMU-2":
+            # (a) Elbow flexion/extension (yaw)
             elbow_data_records.append([frame, yaw_diff])
+            
+            # (b) Compute shoulder rotation using adjusted reference.
+            # Rotate the reference quaternion 90° CCW about the Z axis.
+            R_adjust = R.from_euler('z', 90, degrees=True)
+            R_ref_adjusted = R_adjust * R_ref  # adjusted reference
+            R_diff_adjusted = R_ref_adjusted.inv() * R_cur
+            # Extract the pitch component from the adjusted relative rotation.
+            _, adjusted_pitch, _ = R_diff_adjusted.as_euler('xyz', degrees=True)
+            shoulder_rotation_data_records.append([frame, adjusted_pitch])
+            
+            # (c) Wrist pronation/supination (roll)
+            wrist_data_records.append([frame, "Wrist", roll_diff])
 
-        # Capture wrist pronation/supination (roll) for both sensors:
-        # For IMU-1, record as Hand; for IMU-2, record as Wrist.
+        # For IMU-1, capture wrist pronation/supination (roll)
         if imu_id == "IMU-1":
             wrist_data_records.append([frame, "Hand", roll_diff])
-        if imu_id == "IMU-2":
-            wrist_data_records.append([frame, "Wrist", roll_diff])
 
         # Update segment positions based on current rotation
         parent_pos = segment_positions[parent_id]
@@ -315,6 +324,10 @@ df_wrist = pd.DataFrame(
     wrist_data_records, 
     columns=["frame", "sensor", "wrist_pronation_supination_deg"]
 )
+df_shoulder_rotation = pd.DataFrame(
+    shoulder_rotation_data_records,
+    columns=["frame", "shoulder_rotation_deg"]
+)
 
 # Reshape wrist measurements: use pivot_table to aggregate duplicate entries (mean is used here)
 df_wrist_pivot = df_wrist.pivot_table(
@@ -332,10 +345,16 @@ df_wrist_pivot.rename(
     inplace=True
 )
 
-# Merge the DataFrames to consolidate joint angle metrics by frame
+# Merge all DataFrames to consolidate joint angle metrics by frame
 df_combined = pd.merge(df_shoulder, df_elbow, on="frame", how="outer")
 df_combined = pd.merge(df_combined, df_wrist_pivot, on="frame", how="outer")
+df_combined = pd.merge(df_combined, df_shoulder_rotation, on="frame", how="outer")
 
-# Save the integrated dataset to a single Excel file
+# Save the integrated dataset to a CSV file
 df_combined.to_csv("combined_angles.csv", index=False)
 print("Saved combined angles to 'combined_angles.csv'")
+
+# To Do List
+# 1 same procedure for vicon
+# compensation
+# thresholds 
