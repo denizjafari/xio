@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-# For 3D axes
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.transform import Rotation as R
 from matplotlib.animation import FuncAnimation
@@ -18,7 +17,7 @@ files = [f for f in os.listdir(folder_path) if f.endswith('.csv')]
 imu_data = {}
 for file in files:
     parts = file.split("_")
-    imu_id = parts[0]  # e.g., "IMU-1", "IMU-2", etc.
+    imu_id = parts[0]  # e.g. "IMU-1", "IMU-2", etc.
 
     if "quaternion" in file:
         data_type = "quaternion_log"
@@ -32,7 +31,7 @@ for file in files:
         if "Time" in df.columns:
             df.rename(columns={"Time": "timestamp"}, inplace=True)
         else:
-            print(f"'timestamp' column missing in {imu_id}. Found columns: {df.columns.tolist()}")
+            print(f"'timestamp' column missing in {imu_id} {data_type}. Found columns: {df.columns.tolist()}")
             continue
 
     if imu_id not in imu_data:
@@ -108,9 +107,10 @@ imu_colors = {
     "IMU-5": "orange",
     "IMU-6": "black",
 }
+# Renaming: IMU-1 remains "Hand"; IMU-2 is now "Wrist"
 imu_labels = {
     "IMU-1": "Hand",
-    "IMU-2": "Forearm",
+    "IMU-2": "Wrist",
     "IMU-3": "Upper Arm",
     "IMU-4": "Shoulder",
     "IMU-5": "Chest-Back",
@@ -133,13 +133,16 @@ angle_line_elbow,   = axAng.plot([], [], 'b-', label='Elbow Angle')
 axAng.legend()
 
 ##############################################################################
+# Additional Data Records for New Movements
+##############################################################################
+elbow_data_records = []   # For elbow flexion/extension (yaw from IMU-2)
+wrist_data_records = []   # For wrist pronation/supination (roll from IMU-1 and IMU-2)
+
+##############################################################################
 # 4) MAKE AXES EQUAL IN 3D
 ##############################################################################
 
 def set_axes_equal(ax):
-    """
-    Ensures equal aspect ratio in 3D, so the skeleton doesn't look distorted.
-    """
     x_limits = ax.get_xlim3d()
     y_limits = ax.get_ylim3d()
     z_limits = ax.get_zlim3d()
@@ -162,9 +165,6 @@ def set_axes_equal(ax):
 ##############################################################################
 
 def angle_between(v1, v2):
-    """
-    Returns the angle in degrees between two 3D vectors v1 and v2.
-    """
     dot_val = np.dot(v1, v2)
     norm_v1 = np.linalg.norm(v1)
     norm_v2 = np.linalg.norm(v2)
@@ -175,48 +175,43 @@ def angle_between(v1, v2):
     return np.degrees(np.arccos(cos_theta))
 
 ##############################################################################
-# 5') STORE REFERENCE QUATERNIONS (FRAME=0) & ADJUST IMU-2
+# 5') RELATIVE RPY FROM FRAME 0
 ##############################################################################
 
+# Store reference quaternions for each IMU from frame 0
 reference_quaternions = {}
 for imu_id, df_imu in processed_data.items():
-    row0 = df_imu.iloc[0]
-    q_ref = np.array([row0["q1"], row0["q2"], row0["q3"], row0["q0"]])  # reorder => [x,y,z,w]
+    row0 = df_imu.iloc[0]  # frame 0
+    q_ref = np.array([row0["q1"], row0["q2"], row0["q3"], row0["q0"]])  # reorder to [x, y, z, w]
     reference_quaternions[imu_id] = q_ref
 
-# --- NEW: For IMU-2, define an explicit +90° offset about Z, then multiply:
-if "IMU-2" in reference_quaternions:
-    R_ref_2 = R.from_quat(reference_quaternions["IMU-2"])
-    R_offset = R.from_euler('z', 90, degrees=True)  # +90° yaw
-    # Multiply the old reference by the offset
-    R_newRef_2 = R_ref_2 * R_offset
-    # Overwrite the stored quaternion with the new reference
-    reference_quaternions["IMU-2"] = R_newRef_2.as_quat()  # still [x,y,z,w]
-
 ##############################################################################
-# 5'') EXTENDED MOVEMENT LOGGING
+# 5'') FUNCTION TO INTERPRET SHOULDER & SAVE
 ##############################################################################
+# For IMU-3 (Upper Arm), interpret pitch (Y axis) as abduction/adduction and yaw (Z axis) as flexion/extension.
+shoulder_data_records = []  # each element: [frame, abduction, flexion]
 
-movement_records = []
-
-def record_movement(frame, imu_id, roll_diff, pitch_diff, yaw_diff):
+def relative_angle(imu_id, diff_angle, frame):
     """
-    Store the angles in a global list so we can save to CSV later.
+    For IMU-3:
+      - Use diff_angle[1] as abduction/adduction (pitch)
+      - Use diff_angle[2] as flexion/extension (yaw)
     """
-    row_data = [
-        frame,
-        imu_id,
-        roll_diff,
-        pitch_diff,
-        yaw_diff
-    ]
-    movement_records.append(row_data)
+    diff_roll, diff_pitch, diff_yaw = diff_angle
+
+    if imu_id == "IMU-3":
+        shoulder_data_records.append([
+            frame,           # frame index
+            diff_pitch,      # abduction/adduction (pitch)
+            diff_yaw         # flexion/extension (yaw)
+        ])
 
 ##############################################################################
-# 6) ANIMATION UPDATE FUNCTION
+# 6) ANIMATE SKELETON & CAPTURE RELATIVE ANGLES
 ##############################################################################
 
 def update(frame):
+    # Update skeleton positions and compute relative rotations
     for imu_id, (parent_id, seg_length) in imu_hierarchy.items():
         if imu_id not in processed_data or parent_id not in segment_positions:
             continue
@@ -225,28 +220,36 @@ def update(frame):
         if frame >= len(quats):
             continue
 
-        # Current orientation
-        q_cur = quats[frame, [1,2,3,0]]  # reorder => [x,y,z,w]
+        q_cur = quats[frame, [1,2,3,0]]  # reorder to [x, y, z, w]
         R_cur = R.from_quat(q_cur)
 
-        # Retrieve reference orientation (with offset if IMU-2)
-        q_ref = reference_quaternions[imu_id]  
+        # Compute relative rotation: R_ref.inv() * R_cur
+        q_ref = reference_quaternions[imu_id]
         R_ref = R.from_quat(q_ref)
-
-        # Relative rotation wrt the (possibly offset) reference
         R_diff = R_ref.inv() * R_cur
         roll_diff, pitch_diff, yaw_diff = R_diff.as_euler('xyz', degrees=True)
 
-        # Save angles to global list
-        record_movement(frame, imu_id, roll_diff, pitch_diff, yaw_diff)
+        # Capture shoulder angles for IMU-3
+        relative_angle(imu_id, (roll_diff, pitch_diff, yaw_diff), frame)
 
-        # Update skeleton position
+        # Capture elbow flexion/extension (yaw) for IMU-2
+        if imu_id == "IMU-2":
+            elbow_data_records.append([frame, yaw_diff])
+
+        # Capture wrist pronation/supination (roll) for both sensors:
+        # For IMU-1, record as Hand; for IMU-2, record as Wrist.
+        if imu_id == "IMU-1":
+            wrist_data_records.append([frame, "Hand", roll_diff])
+        if imu_id == "IMU-2":
+            wrist_data_records.append([frame, "Wrist", roll_diff])
+
+        # Update segment positions based on current rotation
         parent_pos = segment_positions[parent_id]
         child_vec = unit_vectors[imu_id] * seg_length
         child_pos = R_cur.apply(child_vec) + parent_pos
         segment_positions[imu_id] = child_pos
 
-    # 3D skeleton lines
+    # Update skeleton lines for visualization
     for imu_id, (parent_id, _) in imu_hierarchy.items():
         if imu_id in segment_positions and parent_id in segment_positions:
             p_pos = segment_positions[parent_id]
@@ -255,7 +258,7 @@ def update(frame):
                                    [p_pos[1], c_pos[1]])
             lines[imu_id].set_3d_properties([p_pos[2], c_pos[2]])
 
-    # Shoulder & elbow absolute angles for the right subplot
+    # Compute "absolute" angles based on segment positions
     current_shoulder = None
     if ("IMU-6" in segment_positions and "IMU-5" in segment_positions
         and "IMU-4" in segment_positions and "IMU-3" in segment_positions):
@@ -277,6 +280,7 @@ def update(frame):
 
     angle_line_shoulder.set_data(np.arange(frame + 1), shoulder_angles[:frame + 1])
     angle_line_elbow.set_data(np.arange(frame + 1), elbow_angles[:frame + 1])
+
     axAng.relim()
     axAng.autoscale_view()
 
@@ -296,17 +300,42 @@ ani = FuncAnimation(fig, update, frames=num_frames, interval=1, blit=False)
 plt.show()
 
 ##############################################################################
-# 8) SAVE LOGGED DATA TO CSV
+# 8) SAVE RESULTS TO CSV
 ##############################################################################
+# Convert the individual data records to DataFrames
+df_shoulder = pd.DataFrame(
+    shoulder_data_records, 
+    columns=["frame", "shoulder_abductionAdduction_deg", "shoulder_flexionExtension_deg"]
+)
+df_elbow = pd.DataFrame(
+    elbow_data_records, 
+    columns=["frame", "elbow_flexion_extension_deg"]
+)
+df_wrist = pd.DataFrame(
+    wrist_data_records, 
+    columns=["frame", "sensor", "wrist_pronation_supination_deg"]
+)
 
-columns = [
-    "frame",
-    "IMU_ID",
-    "roll_deg",
-    "pitch_deg",
-    "yaw_deg"
-]
+# Reshape wrist measurements: use pivot_table to aggregate duplicate entries (mean is used here)
+df_wrist_pivot = df_wrist.pivot_table(
+    index="frame", 
+    columns="sensor", 
+    values="wrist_pronation_supination_deg",
+    aggfunc='mean'
+).reset_index()
 
-df_out = pd.DataFrame(movement_records, columns=columns)
-df_out.to_csv("movement_angles_with_IMU2_offset.csv", index=False)
-print("Saved angles to 'movement_angles_with_IMU2_offset.csv'")
+df_wrist_pivot.rename(
+    columns={
+        "Hand": "wrist_pronation_supination_Hand",
+        "Wrist": "wrist_pronation_supination_Wrist"
+    }, 
+    inplace=True
+)
+
+# Merge the DataFrames to consolidate joint angle metrics by frame
+df_combined = pd.merge(df_shoulder, df_elbow, on="frame", how="outer")
+df_combined = pd.merge(df_combined, df_wrist_pivot, on="frame", how="outer")
+
+# Save the integrated dataset to a single Excel file
+df_combined.to_csv("combined_angles.csv", index=False)
+print("Saved combined angles to 'combined_angles.csv'")
